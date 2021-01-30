@@ -8,11 +8,13 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:device_info/device_info.dart';
 import 'dart:convert';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:modal_progress_hud/modal_progress_hud.dart';
 import 'package:wellmadecrm/notifications.dart';
 import 'package:barcode_scan/barcode_scan.dart';
 import 'package:wellmadecrm/utilities/utils.dart';
+import 'package:crypto/crypto.dart';
+import 'package:crypto/src/hmac.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MainPage extends StatefulWidget {
   @override
@@ -26,6 +28,8 @@ class MainPageState extends State<MainPage> {
   var globalToken;
   var centerTxt = 'Press Start';
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  var cookie;
+  SharedPreferences prefs;
 
   TextEditingController joController = TextEditingController();
   TextEditingController uidController = TextEditingController();
@@ -42,10 +46,19 @@ class MainPageState extends State<MainPage> {
     androidDeviceInfo = await deviceInfo.androidInfo;
   }
 
+  saveSession(String sessionId) async {
+    await prefs.setString("sessionId", sessionId);
+  }
+
+  void initSharedPreferences() async {
+    prefs = await SharedPreferences.getInstance();
+  }
+
   @override
   void initState() {
     super.initState();
 
+    initSharedPreferences();
     getDeviceInfo();
 
     _messaging.getToken().then((token) {
@@ -58,6 +71,12 @@ class MainPageState extends State<MainPage> {
         }).then((result) {
           var map = json.decode(result);
           Utils.toast(map['reason']);
+
+          //  process cookie
+          int start = cookie.indexOf('=')+1;
+          int end = cookie.indexOf(';');
+
+          saveSession(cookie.substring(start, end));
         });
 
       } else {
@@ -202,7 +221,7 @@ class MainPageState extends State<MainPage> {
                                     TextField(
                                       enabled: false,
                                       controller: qrController,
-                                      keyboardType: TextInputType.number,
+                                      keyboardType: TextInputType.text,
                                       decoration: InputDecoration(
                                         labelText: 'QR',
                                         hintText: 'QR',
@@ -214,7 +233,12 @@ class MainPageState extends State<MainPage> {
                                     TextField(
                                       onChanged: (value) {},
                                       controller: joController,
-                                      keyboardType: TextInputType.number,
+                                      keyboardType: TextInputType.text,
+                                      maxLength: 9,
+                                      maxLengthEnforced: true,
+                                      /*inputFormatters: [
+                                        WhitelistingTextInputFormatter(RegExp("[A-Za-z0-9]")),
+                                      ],*/
                                       decoration: InputDecoration(
                                         labelText: 'JO',
                                         hintText: 'JO',
@@ -231,13 +255,23 @@ class MainPageState extends State<MainPage> {
                                             child: Text('Submit', style: TextStyle(color: Colors.black54),),
                                             onPressed: () {
                                               Navigator.of(context).pop();
+                                              var key = "secretkey123";
+
+                                              var dateTimeNow = DateTime.now().toString();
+                                              var secretKey = utf8.encode(key);
+                                              var message = utf8.encode(joController.text+qrController.text+dateTimeNow);
+                                              var sha256Hex = Hmac(sha256, secretKey).convert(message);
 
                                               sendQr({
                                                 'qrcode': qrController.text,
                                                 'jonum': joController.text,
                                                 'token': globalToken.toString(),
+                                                'datetime': dateTimeNow,
+                                                'hex': sha256Hex.toString(),
+                                                'secretKey': key,
                                               }).then((result) {
                                                 var map = json.decode(result);
+
                                                 setState(() {
                                                   centerTxt = map['reason'];
                                                 });
@@ -358,8 +392,10 @@ class MainPageState extends State<MainPage> {
     try {
 
       final uri = Uri.http(domain, path, params,);
-      var response = await http.post(uri, headers: {'Accept': 'application/json'})
-          .timeout(const Duration(seconds: 10));
+      var response = await http.post(uri, headers: {
+        'Accept': 'application/json',}).timeout(const Duration(seconds: 10));
+
+      cookie = response.headers['set-cookie'];
 
       if (response == null) {
         return '{"success": false, "reason": "The server took long to respond."}';
@@ -385,6 +421,7 @@ class MainPageState extends State<MainPage> {
 
     const domain = Utils.domain;
     const path = '/wellmadecrm/processqr';
+    var sessionId = prefs.getString('sessionId');
 
     if (domain == null || path == null) {
       setState(() { _loading = false; });
@@ -399,9 +436,10 @@ class MainPageState extends State<MainPage> {
     try {
 
       final uri = Uri.http(domain, path, params,);
-
-      var response = await http.post(uri, headers: {'Accept': 'application/json'})
-          .timeout(const Duration(seconds: 10));
+      var response = await http.post(uri, headers: {
+        'Accept': 'application/json',
+        'Cookie': 'JSESSIONID='+sessionId,
+      }).timeout(const Duration(seconds: 10));
 
       if (response == null) {
         return '{"success": false, "reason": "The server took long to respond."}';
@@ -416,6 +454,7 @@ class MainPageState extends State<MainPage> {
     } on TimeoutException {
       return '{"success": false, "reason": "The server took long to respond."}';
     } catch (e) {
+      print(e.toString());
       return '{"success": false, "reason": "Cannot process qr at this time."}';
     } finally {
       setState(() { _loading = false; });

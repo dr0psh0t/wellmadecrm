@@ -4,6 +4,7 @@ import 'package:fluttertoast/fluttertoast.dart';
 class Utils {
 
   static const domain = '192.168.1.30:8080';
+  //static const domain = '3.139.62.117:8080';
   //static const path = '/wellmadecrm/savedevicetoken';
 
   static void toast(String msg) {
