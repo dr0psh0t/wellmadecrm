@@ -1,0 +1,25 @@
+{
+	"serialNum":"conrodar",
+	"dateCommit":"2021-02-01",
+	"iid":43834,
+	"dateFinished":"2021-01-28",
+	"preparedDate":"2021-01-28",
+	"woList":[
+		{
+			"scopeGroup":"CONNECTING ROD ARM",
+			"scopeOfWork":"4.4 Piston Pin Bushing Replace",
+			"jobType":"er",
+			"dStart":"2021-01-28 13:17",
+			"dEnd":"2021-01-28 16:17"
+		}
+	],
+	"joNum":"88858",
+	"csa":"Rosenier Jordan",
+	"terms":"cod",
+	"dateReceived":"2021-01-28",
+	"model":"NT855",
+	"jobType":"",
+	"make":"Cummins"
+}
+
+//{preparedDate: 2021-01-28, jobType: , woList: [{"scopeOfWork":"4.4 Piston Pin Bushing Replace","dStart":"2021-01-28 13:17","scopeGroup":"CONNECTING ROD ARM","dEnd":"2021-01-28 16:17","jobType":"er"}], serialNum: conrodar, csa: Rosenier Jordan, iid: 43834, make: Cummins, dateCommit: 2021-02-01, joNum: 88858, model: NT855, terms: cod, dateReceived: 2021-01-28, dateFinished: 2021-01-28}*/

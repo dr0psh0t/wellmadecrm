@@ -15,6 +15,7 @@ import 'package:wellmadecrm/utilities/utils.dart';
 import 'package:crypto/crypto.dart';
 import 'package:crypto/src/hmac.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'jo_progress_page.dart';
 
 class MainPage extends StatefulWidget {
   @override
@@ -29,6 +30,7 @@ class MainPageState extends State<MainPage> {
   var centerTxt = 'Press Start';
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   var cookie;
+  var map;
   SharedPreferences prefs;
 
   TextEditingController joController = TextEditingController();
@@ -88,13 +90,20 @@ class MainPageState extends State<MainPage> {
         onMessage: (Map<String, dynamic> message) async {
           _showNotificationWithDefaultSound(message['notification']['title'],
               message['notification']['body']);
+          //print('onMessage'+message.toString());
+          //print(message['data'].runtimeType);
+
+          Navigator.push(context, MaterialPageRoute(
+              builder: (context) => JoProgressPage(message: message,)));
+
         },
         onResume: (Map<String, dynamic> message) async {
-          _showNotificationWithDefaultSound(message['notification']['title'],
-              message['notification']['body']);
+          //_showNotificationWithDefaultSound(message['notification']['title'], message['notification']['body']);
+          print('onResume');
+          print(map);
         },
         onLaunch: (Map<String, dynamic> message) async {
-          print('on launch $message');
+          //print('on launch $message');
         }
     );
 
@@ -106,7 +115,6 @@ class MainPageState extends State<MainPage> {
     );
 
     flutterLocalNotificationsPlugin = new FlutterLocalNotificationsPlugin();
-
     flutterLocalNotificationsPlugin.initialize(initializationSettings,
         onSelectNotification: onSelectNotification);
   }
@@ -270,11 +278,12 @@ class MainPageState extends State<MainPage> {
                                                 'hex': sha256Hex.toString(),
                                                 'secretKey': key,
                                               }).then((result) {
-                                                var map = json.decode(result);
+                                                //map = json.decode(result);
 
+                                                /*
                                                 setState(() {
                                                   centerTxt = map['reason'];
-                                                });
+                                                });*/
                                               });
 
                                             },
