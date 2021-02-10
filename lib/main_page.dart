@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'dart:async';
@@ -17,6 +18,8 @@ import 'package:crypto/src/hmac.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'jo_progress_page.dart';
 
+//  https://abeljoo.com/2019/07/31/flutter-zh-cn/
+
 class MainPage extends StatefulWidget {
   @override
   State<StatefulWidget> createState() {
@@ -31,6 +34,7 @@ class MainPageState extends State<MainPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   var cookie;
   var map;
+  static int counter = 0;
   SharedPreferences prefs;
 
   TextEditingController joController = TextEditingController();
@@ -71,14 +75,19 @@ class MainPageState extends State<MainPage> {
           'newToken': token,
           'deviceInfo': androidDeviceInfo.model,
         }).then((result) {
-          var map = json.decode(result);
-          Utils.toast(map['reason']);
 
-          //  process cookie
-          int start = cookie.indexOf('=')+1;
-          int end = cookie.indexOf(';');
+          try {
+            var map = json.decode(result);
+            Utils.toast(map['reason']);
 
-          saveSession(cookie.substring(start, end));
+            //  process cookie
+            int start = cookie.indexOf('=') + 1;
+            int end = cookie.indexOf(';');
+
+            saveSession(cookie.substring(start, end));
+          } catch (e) {
+            Utils.toast('Device token problem');
+          }
         });
 
       } else {
@@ -90,20 +99,44 @@ class MainPageState extends State<MainPage> {
         onMessage: (Map<String, dynamic> message) async {
           _showNotificationWithDefaultSound(message['notification']['title'],
               message['notification']['body']);
-          //print('onMessage'+message.toString());
-          //print(message['data'].runtimeType);
 
-          Navigator.push(context, MaterialPageRoute(
-              builder: (context) => JoProgressPage(message: message,)));
+          if (counter % 2 == 0) {
+            showDialog(
+              context: context,
+              builder: (BuildContext context) {
 
+                return CupertinoAlertDialog(
+                  title: Text('Wellmade'),
+                  content: Text('A notification has received.'),
+                  actions: <Widget>[
+                    CupertinoDialogAction(
+                      isDefaultAction: true,
+                      child: Text('Read'),
+                      onPressed: () {
+                        Navigator.push(context, MaterialPageRoute(
+                            builder: (context) => JoProgressPage(message: message,)));
+                      },
+                    ),
+                    CupertinoDialogAction(
+                      isDefaultAction: true,
+                      child: Text('Close'),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ],
+                );
+              }
+            );
+          }
+          ++counter;
         },
         onResume: (Map<String, dynamic> message) async {
           //_showNotificationWithDefaultSound(message['notification']['title'], message['notification']['body']);
-          print('onResume');
-          print(map);
+          print('onResume $message');
         },
         onLaunch: (Map<String, dynamic> message) async {
-          //print('on launch $message');
+          print('on launch $message');
         }
     );
 
@@ -161,7 +194,7 @@ class MainPageState extends State<MainPage> {
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
                         ListTile(
-                          leading: Icon(Icons.sms),
+                          leading: Icon(Icons.sms,),
                           title: Text('Text', style: TextStyle(color: Colors.black54),),
                           onTap: () {
                             Navigator.of(context).pop();
@@ -222,7 +255,7 @@ class MainPageState extends State<MainPage> {
                             context: context,
                             builder: (context) {
                               return AlertDialog(
-                                title: Text('Enter', style: TextStyle(color: Colors.black54),),
+                                //title: Text('Enter', style: TextStyle(color: Colors.black54),),
                                 content: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: <Widget>[
@@ -244,9 +277,6 @@ class MainPageState extends State<MainPage> {
                                       keyboardType: TextInputType.text,
                                       maxLength: 9,
                                       maxLengthEnforced: true,
-                                      /*inputFormatters: [
-                                        WhitelistingTextInputFormatter(RegExp("[A-Za-z0-9]")),
-                                      ],*/
                                       decoration: InputDecoration(
                                         labelText: 'JO',
                                         hintText: 'JO',
@@ -260,7 +290,7 @@ class MainPageState extends State<MainPage> {
                                         mainAxisAlignment: MainAxisAlignment.end,
                                         children: <Widget>[
                                           FlatButton(
-                                            child: Text('Submit', style: TextStyle(color: Colors.black54),),
+                                            child: Icon(Icons.send, color: Colors.black54,),
                                             onPressed: () {
                                               Navigator.of(context).pop();
                                               var key = "secretkey123";
@@ -278,12 +308,7 @@ class MainPageState extends State<MainPage> {
                                                 'hex': sha256Hex.toString(),
                                                 'secretKey': key,
                                               }).then((result) {
-                                                //map = json.decode(result);
-
-                                                /*
-                                                setState(() {
-                                                  centerTxt = map['reason'];
-                                                });*/
+                                                //print('result $result');
                                               });
 
                                             },
@@ -463,7 +488,6 @@ class MainPageState extends State<MainPage> {
     } on TimeoutException {
       return '{"success": false, "reason": "The server took long to respond."}';
     } catch (e) {
-      print(e.toString());
       return '{"success": false, "reason": "Cannot process qr at this time."}';
     } finally {
       setState(() { _loading = false; });
