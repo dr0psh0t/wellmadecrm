@@ -10,6 +10,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:device_info/device_info.dart';
 import 'dart:convert';
 import 'package:modal_progress_hud/modal_progress_hud.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:wellmadecrm/notifications.dart';
 import 'package:barcode_scan/barcode_scan.dart';
 import 'package:wellmadecrm/utilities/utils.dart';
@@ -71,10 +72,13 @@ class MainPageState extends State<MainPage> {
       if (token.isNotEmpty && androidDeviceInfo.model.isNotEmpty) {
         globalToken = token;
 
-        saveNewToken({
+        //saveNewToken({
+        sendRequest({
           'newToken': token,
           'deviceInfo': androidDeviceInfo.model,
-        }).then((result) {
+        }, '/wellmadecrm/savedevicetoken').then((result) {
+
+          print(result);
 
           try {
             var map = json.decode(result);
@@ -183,7 +187,7 @@ class MainPageState extends State<MainPage> {
             },
           ),
           IconButton(
-            icon: Icon(Icons.send),
+            icon: Icon(Icons.update),
             onPressed: () {
               showDialog(
                 context: context,
@@ -198,7 +202,7 @@ class MainPageState extends State<MainPage> {
                           title: Text('Text', style: TextStyle(color: Colors.black54),),
                           onTap: () {
                             Navigator.of(context).pop();
-                            //_textMe('87777');
+                            textMe('87777');
                           },
                         ),
                         ListTile(
@@ -206,7 +210,7 @@ class MainPageState extends State<MainPage> {
                           title: Text('Email', style: TextStyle(color: Colors.black54),),
                           onTap: () {
                             Navigator.of(context).pop();
-                            //_sendMail('87777', 'rjordan', '', 'Attention');
+                            sendMail('', '', '', 'Attention');
                           },
                         ),
                       ],
@@ -293,22 +297,52 @@ class MainPageState extends State<MainPage> {
                                             child: Icon(Icons.send, color: Colors.black54,),
                                             onPressed: () {
                                               Navigator.of(context).pop();
-                                              var key = "secretkey123";
 
+                                              var key = "secretkey123";
                                               var dateTimeNow = DateTime.now().toString();
                                               var secretKey = utf8.encode(key);
                                               var message = utf8.encode(joController.text+qrController.text+dateTimeNow);
                                               var sha256Hex = Hmac(sha256, secretKey).convert(message);
+                                              String localToken = globalToken.toString();
+                                              String uk = localToken.substring(localToken.length-45, localToken.length);
 
-                                              sendQr({
+                                              //print(uk.length);
+
+                                              //sendQr({
+                                              /*sendRequest({
                                                 'qrcode': qrController.text,
                                                 'jonum': joController.text,
                                                 'token': globalToken.toString(),
                                                 'datetime': dateTimeNow,
                                                 'hex': sha256Hex.toString(),
                                                 'secretKey': key,
-                                              }).then((result) {
+                                              }, '/wellmadecrm/processqr').then((result) {
                                                 //print('result $result');
+                                              });*/
+
+                                              sendRequest({
+                                                'fbuk': localToken,
+                                                'jo': joController.text,
+                                                'qr': qrController.text,
+                                                't': dateTimeNow,
+                                                'h': sha256Hex.toString(),
+                                                'secretKey': key,
+                                                'uk': uk,
+                                              }, '/wellmadecrm/authnewmcrm').then((result) {
+                                                print('authnewmcrm result: $result');
+
+                                                qrController.text = '';
+                                                joController.text = '';
+
+                                                /*
+                                                if no api key saved, call authnewmcrm and if success, it will return json like this:
+                                                {"data":[{"uk":"uVC3-Qd0spM_wcUnwFM5ZAbaIBZTeQIu1Rp2VzUzPgivs","ci":0,"ak":"6G5CHhvNK\/6wIj7lPw+HbvFdJswwVIoeZ10NhpukPnk="}],"success":true}
+
+                                                else call processqr with the api key
+
+                                                if calling authnewmcrm and customer is already registered, it will return json like this:
+                                                {"reason":"Customer Already Registered.","success":false}
+                                                 */
                                               });
 
                                             },
@@ -407,6 +441,53 @@ class MainPageState extends State<MainPage> {
     }
   }
 
+  Future<String> sendRequest(var params, var path) async {
+    setState(() { _loading = true; });
+
+    const domain = Utils.domain;
+    var sessionId = prefs.getString('sessionId');
+
+    if (domain == null || path == null) {
+      setState(() { _loading = false; });
+      return '{"success": false, "reason": "Server address error."}';
+    }
+
+    if (domain.isEmpty || path.isEmpty) {
+      setState(() { _loading = false; });
+      return '{"success": false, "reason": "Server address error."}';
+    }
+
+    try {
+
+      final uri = Uri.http(domain, path, params,);
+      var response = await http.post(uri, headers: {
+        'Accept': 'application/json',
+        'Cookie': 'JSESSIONID='+sessionId,
+      }).timeout(const Duration(seconds: 10));
+
+      cookie = response.headers['set-cookie'];
+
+      if (response == null) {
+        return '{"success": false, "reason": "The server took long to respond."}';
+      } else if (response.statusCode == 200) {
+        return response.body;
+      } else {
+        print(response.body);
+        return '{"success": false, "reason": "Cannot resolve response."}';
+      }
+
+    } on SocketException {
+      return '{"success": false, "reason": "Failed to connect to the server."}';
+    } on TimeoutException {
+      return '{"success": false, "reason": "The server took long to respond."}';
+    } catch (e) {
+      return '{"success": false, "reason": "Cannot login at this time."}';
+    } finally {
+      setState(() { _loading = false; });
+    }
+  }
+
+  /*
   Future<String> saveNewToken(var params) async {
     setState(() { _loading = true; });
 
@@ -427,7 +508,8 @@ class MainPageState extends State<MainPage> {
 
       final uri = Uri.http(domain, path, params,);
       var response = await http.post(uri, headers: {
-        'Accept': 'application/json',}).timeout(const Duration(seconds: 10));
+        'Accept': 'application/json',
+      }).timeout(const Duration(seconds: 10));
 
       cookie = response.headers['set-cookie'];
 
@@ -492,10 +574,9 @@ class MainPageState extends State<MainPage> {
     } finally {
       setState(() { _loading = false; });
     }
-  }
+  }*/
 
-  /*
-  _sendMail(String joNumber, String csa, String emailAdd, String subject) async {
+  sendMail(String joNumber, String csa, String emailAdd, String subject) async {
 
     // Android and iOS
     var uri = 'mailto:ddagondon@wellmade-motors.com?subject='+subject+' '+csa
@@ -509,7 +590,7 @@ class MainPageState extends State<MainPage> {
     }
   }
 
-  _textMe(String joNumber) async {
+  textMe(String joNumber) async {
 
     var uri = 'sms:+09 287 092 780?body=Requesting update for JO Number: '+joNumber+' ';
 
@@ -528,5 +609,5 @@ class MainPageState extends State<MainPage> {
         throw 'Could not launch $uri';
       }
     }
-  }*/
+  }
 }

@@ -50,4 +50,7 @@ class Utils {
         }
     );
   }
+
+  Future<String> sendRequest(var params, var path, var _loading) {
+  }
 }
