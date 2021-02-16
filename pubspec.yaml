@@ -41,6 +41,7 @@ dependencies:
   barcode_scan: ^2.0.1
   qr_mobile_vision: ^0.3.1
   device_info: ^0.4.1+4
+  permission_handler: ^5.1.0+2
   sqflite:
   path:
 
