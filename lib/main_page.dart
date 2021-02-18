@@ -223,60 +223,55 @@ class MainPageState extends State<MainPage> {
         ],
       ),
       body: ModalProgressHUD(
-        child: Center(
-          child: Text(centerTxt),
-        ),
+        child: Center(child: Text(centerTxt),),
         inAsyncCall: _loading,
       ),
       floatingActionButton: FloatingActionButton.extended(
         icon: Icon(Icons.open_in_new),
         label: Text('Start'),
         onPressed: () {
-          showDialog(
+          showCupertinoModalPopup(
             context: context,
-            builder: (context) {
+            builder: (BuildContext context) => CupertinoActionSheet(
+              title: Text('Select Option'),
+              //message: Text('Which option?'),
+              actions: <Widget>[
+                CupertinoActionSheetAction(
+                  child: Text('Add'),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    dialogShow(context);
+                  },
+                ),
+                CupertinoActionSheetAction(
+                  child: Text('Invoice Scan'),
+                  onPressed: () {
+                    Navigator.of(context).pop();
 
-              return CupertinoAlertDialog(
-                title: Text('Select', style: TextStyle(color: Colors.black54),),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    ListTile(
-                      leading: Icon(Icons.add),
-                      title: Text('Add', style: TextStyle(color: Colors.black54),),
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        dialogShow(context);
-                      },
-                    ),
-                    ListTile(
-                      leading: Icon(Icons.scanner),
-                      title: Text('Scan QR', style: TextStyle(color: Colors.black54),),
-                      onTap: () {
-                        Navigator.of(context).pop();
+                    askCameraPermission().then((granted) {
+                      if (granted) {
+                        scanQr().then((result) {
+                          var map = json.decode(result);
 
-                        askCameraPermission().then((granted) {
-                          if (granted) {
-                            scanQr().then((result){
-                              var map = json.decode(result);
-
-                              if (map['success']) {
-                                qrController.text = map['data'];
-                                displayDialog();
-                              } else {
-                                Utils.toast(map['reason']);
-                              }
-                            });
+                          if (map['success']) {
+                            qrController.text = map['data'];
+                            displayDialog();
                           } else {
-                            Utils.toast('Allow application to access camera');
+                            Utils.toast(map['reason']);
                           }
                         });
-                      },
-                    ),
-                  ],
+                      } else {
+                        Utils.toast('Allow application to access camera');
+                      }
+                    });
+                  },
                 ),
-              );
-            }
+              ],
+              cancelButton: CupertinoActionSheetAction(
+                child: Text('Cancel'),
+                onPressed: () { Navigator.pop(context); },
+              ),
+            )
           );
         },
       ),
@@ -382,7 +377,35 @@ class MainPageState extends State<MainPage> {
     // app. The only way to change the permission's status now is to let the
     // user manually enable it in the system settings.
     if (status.isPermanentlyDenied) {
-      openAppSettings();
+
+      showCupertinoDialog(
+        context: context,
+        builder: (_) => CupertinoAlertDialog(
+          title: Text('Camera Permission', style: TextStyle(color: Colors.black87),),
+          content: Text(
+            'Phone has permanently denied app to use camera. Go to app system settings and turn on camera permission.',
+            style: TextStyle(color: Colors.black54),
+          ),
+          actions: <Widget>[
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: Text('Settings'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                openAppSettings();
+              },
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: Text('Close'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        )
+      );
+
       return false;
     }
 
@@ -402,7 +425,8 @@ class MainPageState extends State<MainPage> {
     setState(() { _loading = true; });
 
     const domain = Utils.domain;
-    var sessionId = prefs.getString('sessionId') == null ? "E664A728CD9D7A8CF58EA713C8FBB79D" : prefs.getString('sessionId');
+    var sessionId = prefs.getString('sessionId') == null ?
+            "E664A728CD9D7A8CF58EA713C8FBB79D" : prefs.getString('sessionId');
 
     if (domain == null || path == null) {
       setState(() { _loading = false; });
