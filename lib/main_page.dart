@@ -13,6 +13,7 @@ import 'package:modal_progress_hud/modal_progress_hud.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:wellmadecrm/notifications.dart';
 import 'package:barcode_scan/barcode_scan.dart';
+import 'package:wellmadecrm/settings_page.dart';
 import 'package:wellmadecrm/utilities/utils.dart';
 import 'package:crypto/crypto.dart';
 import 'package:crypto/src/hmac.dart';
@@ -49,22 +50,44 @@ class MainPageState extends State<MainPage> {
   DeviceInfoPlugin deviceInfo;
   AndroidDeviceInfo androidDeviceInfo;
 
+  String domain;
+  String path;
+
   void getDeviceInfo() async {
     deviceInfo = DeviceInfoPlugin();
     androidDeviceInfo = await deviceInfo.androidInfo;
   }
 
   saveSession(String sessionId) async {
-    await prefs.setString("sessionId", sessionId);
+    try {
+      if (sessionId.isNotEmpty) {
+        await prefs.setString("sessionId", sessionId);
+      }
+    } catch (e) {
+      Utils.toast('Session error.');
+    }
   }
 
-  storeAk(String ak) async {
-    await prefs.setString("ak", ak);
-    Utils.toast('Device is registered. Please scan again');
+  storeAkPid(String ak, String pid) async {
+    try {
+      if (ak.isNotEmpty && pid.isNotEmpty) {
+        await prefs.setString("ak", ak);
+        await prefs.setString("pid", pid);
+        Utils.toast('Device is registered. Please scan again');
+      }
+    } catch (e) {
+      Utils.toast('Device registration error.');
+    }
   }
 
   void initSharedPreferences() async {
     prefs = await SharedPreferences.getInstance();
+
+    Utils.domain = prefs.getString("domain");
+    Utils.path = prefs.getString("path");
+
+    print('ak ${prefs.getString('ak')}');
+    print('pid ${prefs.getString('pid')}');
   }
 
   @override
@@ -77,84 +100,38 @@ class MainPageState extends State<MainPage> {
     _messaging.getToken().then((token) {
       if (token.isNotEmpty && androidDeviceInfo.model.isNotEmpty) {
         globalToken = token;
-
-        sendRequest({
-          'newToken': token,
-          'deviceInfo': androidDeviceInfo.model,
-        }, '/wellmadecrm/savedevicetoken').then((result) {
-
-          try {
-            var map = json.decode(result);
-            Utils.toast(map['reason']);
-
-            //  process cookie
-            int start = cookie.indexOf('=') + 1;
-            int end = cookie.indexOf(';');
-
-            saveSession(cookie.substring(start, end));
-          } catch (e) {
-            Utils.toast('Device token problem');
-          }
-        });
-
+        tokenRequest(token, androidDeviceInfo.model);
       } else {
         Utils.toast('Failed to generate token for device');
       }
     });
 
     _messaging.configure(
-        onMessage: (Map<String, dynamic> message) async {
-          _showNotificationWithDefaultSound(message['notification']['title'],
-              message['notification']['body']);
-
-          if (counter % 2 == 0) {
-            showCupertinoDialog(
-              context: context,
-              builder: (_) => CupertinoAlertDialog(
-                title: Text('Wellmade', style: TextStyle(color: Colors.black87),),
-                content: Text('A notification has received.', style: TextStyle(color: Colors.black54),),
-                actions: <Widget>[
-                  CupertinoDialogAction(
-                    isDefaultAction: true,
-                    child: Text('Read'),
-                    onPressed: () {
-                      Navigator.push(context, MaterialPageRoute(
-                      builder: (context) => JoProgressPage(message: message,)));
-                    },
-                  ),
-                  CupertinoDialogAction(
-                    isDefaultAction: true,
-                    child: Text('Close'),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                  ),
-                ],
-              )
-            );
-          }
-          ++counter;
-        },
-        onResume: (Map<String, dynamic> message) async {
-          //_showNotificationWithDefaultSound(message['notification']['title'], message['notification']['body']);
-          print('onResume $message');
-        },
-        onLaunch: (Map<String, dynamic> message) async {
-          print('on launch $message');
-        }
+      onMessage: (Map<String, dynamic> message) async {
+        _showNotificationWithDefaultSound(message['notification']['title'],
+            message['notification']['body']);
+        onMessageDialog(message);
+      },
+      onResume: (Map<String, dynamic> message) async {
+        _showNotificationWithDefaultSound(message['notification']['title'], message['notification']['body']);
+        //print('onResume $message');
+      },
+      onLaunch: (Map<String, dynamic> message) async {
+        _showNotificationWithDefaultSound(message['notification']['title'], message['notification']['body']);
+      },
     );
 
     var initializationSettingsAndroid =
     new AndroidInitializationSettings('@mipmap/ic_launcher');
     var initializationSettingsIOS = new IOSInitializationSettings();
     var initializationSettings = new InitializationSettings(
-        initializationSettingsAndroid, initializationSettingsIOS
-    );
+        initializationSettingsAndroid, initializationSettingsIOS);
 
     flutterLocalNotificationsPlugin = new FlutterLocalNotificationsPlugin();
     flutterLocalNotificationsPlugin.initialize(initializationSettings,
         onSelectNotification: onSelectNotification);
-  }
+
+  } //  initState
 
   Future onSelectNotification(String payload) async {}
 
@@ -173,6 +150,57 @@ class MainPageState extends State<MainPage> {
       platformChannelSpecifics, payload: 'Default_Sound',);
   }
 
+  void tokenRequest(String token, String deviceInfo) {
+    sendRequest({
+      'newToken': token,
+      'deviceInfo': deviceInfo,
+    }, '/wellmadecrm/savedevicetoken').then((result) {
+
+      try {
+        var map = json.decode(result);
+        Utils.toast(map['reason']);
+
+        //  process cookie
+        int start = cookie.indexOf('=') + 1;
+        int end = cookie.indexOf(';');
+
+        saveSession(cookie.substring(start, end));
+      } catch (e) {
+        Utils.toast('Device token problem');
+      }
+    });
+  }
+
+  void onMessageDialog(Map<String, dynamic> message) {
+    if (counter % 2 == 0) {
+      showCupertinoDialog(
+          context: context,
+          builder: (_) => CupertinoAlertDialog(
+            title: Text('Wellmade', style: TextStyle(color: Colors.black87),),
+            content: Text('A notification has received.', style: TextStyle(color: Colors.black54),),
+            actions: <Widget>[
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: Text('Read'),
+                onPressed: () {
+                  Navigator.push(context, MaterialPageRoute(
+                      builder: (context) => JoProgressPage(message: message,)));
+                },
+              ),
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: Text('Close'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          )
+      );
+    }
+    ++counter;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -180,12 +208,12 @@ class MainPageState extends State<MainPage> {
       appBar: AppBar(
         title: Text('Home'),
         actions: <Widget>[
-          IconButton(
+          /*IconButton(
             icon: Icon(Icons.notifications),
             onPressed: () {
               Navigator.push(context, MaterialPageRoute(builder: (context) => NotificationsPage()),);
             },
-          ),
+          ),*/
           IconButton(
             icon: Icon(Icons.update),
             onPressed: () {
@@ -218,6 +246,12 @@ class MainPageState extends State<MainPage> {
                   );
                 }
               );
+            },
+          ),
+          IconButton(
+            icon: Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => SettingsScreen()),);
             },
           ),
         ],
@@ -279,21 +313,34 @@ class MainPageState extends State<MainPage> {
   }
 
   void processResult(var result) {
+    print('result $result');
+
     try {
       var map = json.decode(result);
       var success = map['success'];
 
       if (success != null) {
         if (map['success']) {
-          //{"data":[{"uk":"uVC3-Qd0spM_wcUnwFM5ZAbaIBZTeQIu1Rp2VzUzPgivs","ci":0,"ak":"6G5CHhvNK\/6wIj7lPw+HbvFdJswwVIoeZ10NhpukPnk="}],"success":true}
-          storeAk(map['data'][0]['ak']);
+
+          /*
+          {"data":[{
+          "dt":1614161264,
+          "uk":"huVC3-Qd0spM_wcUnwFM5ZAbaIBZTeQIu1Rp2VzUzPgiv",
+          "ci":18857,
+          "hmac":"53450f233569d23ad4c5d42c7a6de4b8f40d5fca07b744e134d8fb3a7e0555b6999e1435ad0457fd3246c3d26d4dcb17f18757f5b7d2ebb290b5d1f6889c94eb",
+          "ak":"z+NNW6vTvy1c9s4F2VsAwc3GW0Ey+q+DQPDmUJys0dM="
+          "pid":"akjsdashdk182938"}],
+          "success":true}
+           */
+
+          storeAkPid(map['data'][0]['ak'], map['data'][0]['pid']);
         } else {
-          Utils.showSnackbar(map['reason'], 'OK', _scaffoldKey);
+          Utils.toast(map['reason']);
         }
       }
 
     } catch (e) {
-      Utils.showSnackbar('Exception has occured', 'OK', _scaffoldKey);
+      Utils.toast('Exception has occured');
     }
   }
 
@@ -422,9 +469,11 @@ class MainPageState extends State<MainPage> {
   }
 
   Future<String> sendRequest(var params, var path) async {
+    //print('params ${params.toString()}');
+
     setState(() { _loading = true; });
 
-    const domain = Utils.domain;
+    var domain = Utils.domain;
     var sessionId = prefs.getString('sessionId') == null ?
             "E664A728CD9D7A8CF58EA713C8FBB79D" : prefs.getString('sessionId');
 
@@ -441,6 +490,7 @@ class MainPageState extends State<MainPage> {
     try {
 
       final uri = Uri.http(domain, path, params,);
+
       var response = await http.post(uri, headers: {
         'Accept': 'application/json',
         'Cookie': 'JSESSIONID='+sessionId,
@@ -451,7 +501,6 @@ class MainPageState extends State<MainPage> {
       if (response == null) {
         return '{"success": false, "reason": "The server took long to respond."}';
       } else if (response.statusCode == 200) {
-        print('path $path');
         print('response.body ${response.body}');
         return response.body;
       } else {
@@ -526,47 +575,61 @@ class MainPageState extends State<MainPage> {
                       onPressed: () {
                         Navigator.of(context).pop();
 
-                        String key = "secretkey123";
-                        String dateTimeNow = DateTime.now().toString();
-                        var secretKey = utf8.encode(key);
-                        var message = utf8.encode(joController.text+qrController.text+dateTimeNow);
-                        var sha256Hex = Hmac(sha256, secretKey).convert(message);
-                        String localToken = globalToken.toString();
-                        String uk = localToken.substring(localToken.length-45, localToken.length);
+                        try {
 
-                        String ak = prefs.getString("ak");
-                        String path = '';
+                          int dateTimeNow = DateTime.now().millisecondsSinceEpoch;
+                          String key;
+                          var message;
+                          var secretKey;
+                          var sha512Hex;
+                          String localToken = globalToken.toString();
+                          String uk = localToken.substring(localToken.length-45, localToken.length);
+                          //String uk = localToken.substring(localToken.length-49, localToken.length-4);
 
-                        if (ak == null) {
-                          path = '/wellmadecrm/authnewmcrm';
-                        } else if (ak.isEmpty){
-                          path = '/wellmadecrm/authnewmcrm';
-                        } else {
-                          path = '/wellmadecrm/processqr';
+                          String ak = prefs.getString('ak');
+                          String pid = prefs.getString('pid');
+                          String path = '';
+
+                          if (ak == null || pid == null) {
+                            key = 'secretkey123';
+                            secretKey = utf8.encode(key);
+                            message = utf8.encode(joController.text+qrController.text+dateTimeNow.toString());
+                            sha512Hex = Hmac(sha512, secretKey).convert(message);
+                            path = Utils.path+'authnewmcrm';
+
+                          } else if (ak.isEmpty || pid.isEmpty) {
+                            key = 'secretkey123';
+                            secretKey = utf8.encode(key);
+                            message = utf8.encode(joController.text+qrController.text+dateTimeNow.toString());
+                            sha512Hex = Hmac(sha512, secretKey).convert(message);
+                            path = Utils.path+'authnewmcrm';
+
+                          } else {
+                            key = ak;
+                            secretKey = utf8.encode(key);
+                            message = utf8.encode(joController.text+qrController.text+dateTimeNow.toString()+pid);
+                            sha512Hex = Hmac(sha512, secretKey).convert(message);
+                            path = Utils.path+'getjoworkstatus';
+                          }
+
+                          sendRequest({
+                            'fbuk': localToken,
+                            'jo': joController.text,
+                            'qr': qrController.text,
+                            't': dateTimeNow.toString(),
+                            'h': sha512Hex.toString(),
+                            'secretKey': key,
+                            'uk': uk,
+                            'pid': pid,
+                          }, path).then((result) {
+                            qrController.text = joController.text = '';
+                            processResult(result);
+                          });
+
+                        } catch (e) {
+                          //print('exception ${e.toString()}');
+                          Utils.toast('Exception has occurred');
                         }
-
-                        sendRequest({
-                          'fbuk': localToken,
-                          'jo': joController.text,
-                          'qr': qrController.text,
-                          't': dateTimeNow,
-                          'h': sha256Hex.toString(),
-                          'secretKey': key,
-                          'uk': uk,
-                        }, path).then((result) {
-
-                          qrController.text = '';
-                          joController.text = '';
-
-                          processResult(result);
-                        });
-
-                        //if no api key saved, call authnewmcrm and if success, it will return json like this:
-                        //{"data":[{"uk":"uVC3-Qd0spM_wcUnwFM5ZAbaIBZTeQIu1Rp2VzUzPgivs","ci":0,"ak":"6G5CHhvNK\/6wIj7lPw+HbvFdJswwVIoeZ10NhpukPnk="}],"success":true}
-                        //else call processqr with the api key
-                        //if calling authnewmcrm and customer is already registered, it will return json like this:
-                        //{"reason":"Customer Already Registered.","success":false}
-
                       },
                     ),
                   ],

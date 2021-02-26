@@ -3,7 +3,9 @@ import 'package:fluttertoast/fluttertoast.dart';
 
 class Utils {
 
-  static const domain = '192.168.1.30:8080';
+  //  custcare.wellmade-motors.com:8899/jo/
+  static String domain = '';
+  static String path = '';
   //static const domain = '3.139.62.117:8080';
   //static const path = '/wellmadecrm/savedevicetoken';
 
